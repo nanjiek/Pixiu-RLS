@@ -1,0 +1,35 @@
+server:
+  httpAddr: ":8080"     # HTTP 监听地址，示例：":8080" 或 "0.0.0.0:8080"
+
+redis:
+  addr: "127.0.0.1:6379" # Redis 地址
+  db: 0                  # Redis DB 编号
+  prefix: "pixiu:rls"    # 统一 Key 前缀，便于环境隔离（如 "dev:pixiu:rls"）
+  updatesChannel: "pixiu_rls_updates" # 规则热更新的 Pub/Sub 频道名
+
+features:
+  audit: "none"          # 审计模式："none" | "redis_stream"（可扩展 "kafka"）
+  localFallback: false   # Redis 故障是否本地退化（仅建议开发环境）
+
+# 启动时注入的规则（可选）
+bootstrapRules:
+  - ruleId: "login_rule"     # 规则ID
+    match: "/api/login"      # 匹配路由（也可用 "*" 兜底）
+    algo: "sliding_window"   # "sliding_window" | "token_bucket" | "leaky_bucket"
+    windowMs: 1000           # 窗口大小（毫秒）
+    limit: 100               # 窗口允许的请求数 / 基础速率
+    burst: 20                # 突发容量（令牌桶/漏桶会用到；滑窗不使用也可留 0）
+    dims: ["ip","route"]     # 必需维度（API 会自动补齐 ip/route）
+    quota:                   # 分钟/小时/天级配额（<=0 表示该粒度不限制）
+      perMinute: 1000
+      perHour:   10000
+      perDay:    100000
+    enabled: true            # 是否启用
+    breaker:                 # 熔断（可选，不需要可删除整个字段）
+      enabled: true
+      rlDenyThreshold: 20    # 在窗口内“被限流拒绝”次数到达阈值即熔断
+      rlDenyWindowMs: 10000  # 统计窗口（毫秒）
+      minOpenMs: 8000        # Open 状态最小保持时长（冷却）
+      halfOpenProbePercent: 10 # 半开探测采样百分比
+      halfOpenMinPass: 5     # 半开阶段连续通过多少次后关闭熔断
+      halfOpenMaxFail: 3     # 半开阶段失败多少次后回到 Open

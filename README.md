@@ -1,2 +1,30 @@
 # Pixiu-RLS
-A Go + Redis based unified rate limiting and quota service for dubbo-go-pixiu gateway and microservices, supporting sliding window, token bucket, and leaky bucket algorithms, multi-dimensional limits (IP, user, app, route), per-minute/hour/day quotas, burst smoothing, black/white lists, real-time monitoring, and distributed consistency.
+
+基于 Go + Redis 的高性能分布式限流配额服务，支持多种限流算法和多维度控制，适用于网关和微服务架构。
+
+## 项目简介
+
+Pixiu-RLS (Rate Limiting Service) 是一个轻量级但功能强大的限流服务，旨在为分布式系统提供统一的流量控制能力。它支持多种限流算法、多维度限制、配额管理和熔断机制，可灵活应对不同场景的流量管控需求。
+
+## 核心功能
+
+- 支持多种限流算法：滑动窗口、令牌桶、漏桶等
+- 多维度限流：基于 IP、用户 ID、应用 ID、路由等
+- 多级配额控制：分钟级、小时级、天级配额限制
+- 动态规则管理：支持规则的动态更新与分发
+- 熔断机制：当系统压力过大时自动熔断保护
+- 黑白名单：灵活配置不受限或始终受限的对象
+- 分布式一致性：基于 Redis 实现分布式环境下的精确限流
+
+## 架构概览
+
+项目采用分层设计，主要包含以下几个核心包：
+
+- `api`：HTTP 接口层，处理外部请求
+- `core`：核心引擎层，实现限流主逻辑
+- `strategy`：算法策略层，实现各种限流算法
+- `repo`：数据访问层，封装 Redis 操作
+- `rules`：规则管理层，处理规则的加载与缓存
+- `config`：配置定义层，定义配置和规则的数据结构
+- `util`：工具函数层，提供通用辅助功能
+
