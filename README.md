@@ -98,7 +98,7 @@ Pixiu-RLS (Rate Limiting Service) 是一个**轻量级但功能强大**的分布
 
 ### 环境要求
 
-- **Go**: 1.21+ 
+- **Go**: 1.25 
 - **Redis**: 7.0+
 - **操作系统**: Linux / macOS / Windows
 
@@ -120,6 +120,7 @@ server:
   httpAddr: ":8080"
 
 redis:
+  mode: "standalone"  # standalone | sentinel | cluster
   addr: "localhost:6379"
   db: 0
   prefix: "pixiu:rls"
@@ -252,6 +253,7 @@ curl -X POST http://localhost:8080/api/rules \
 - [API 文档](docs/API.md) - 完整的 API 接口说明
 - [部署指南](docs/DEPLOYMENT.md) - 生产环境部署最佳实践
 - [开发指南](docs/DEVELOPMENT.md) - 开发者指南和贡献说明
+- [本地降级说明](docs/OPTIMIZATION_LOCAL_FALLBACK.md) - Redis 故障时本地限流/配额降级说明
 
 ### 技术文档
 
@@ -314,6 +316,7 @@ server:
   httpAddr: ":8080"  # HTTP 监听地址
 
 redis:
+  mode: "standalone"  # standalone | sentinel | cluster
   addr: "localhost:6379"      # Redis 地址
   db: 0                       # 数据库编号
   prefix: "pixiu:rls"         # Key 前缀
@@ -321,7 +324,7 @@ redis:
 
 features:
   audit: "none"               # 审计: none | redis_stream
-  localFallback: false        # Redis 故障时是否本地降级
+  localFallback: false  # Redis 故障时是否本地降级（单机内存，非一致）
 
 bootstrapRules:  # 启动时加载的规则
   - ruleId: "example"

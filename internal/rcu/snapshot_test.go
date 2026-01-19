@@ -171,3 +171,94 @@ func BenchmarkMapSnapshot(b *testing.B) {
 	})
 }
 
+type rwSnapshot struct {
+	mu   sync.RWMutex
+	data *TestData
+}
+
+func (s *rwSnapshot) Load() *TestData {
+	s.mu.RLock()
+	data := s.data
+	s.mu.RUnlock()
+	return data
+}
+
+func (s *rwSnapshot) Replace(next *TestData) {
+	s.mu.Lock()
+	s.data = next
+	s.mu.Unlock()
+}
+
+// BenchmarkRWMutexLoad 基准测试：RWMutex 读性能
+func BenchmarkRWMutexLoad(b *testing.B) {
+	data := &TestData{Value: 100, Name: "benchmark"}
+	snap := &rwSnapshot{data: data}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			_ = snap.Load()
+		}
+	})
+}
+
+// BenchmarkRWMutexReplace 基准测试：RWMutex 写性能
+func BenchmarkRWMutexReplace(b *testing.B) {
+	data := &TestData{Value: 100, Name: "benchmark"}
+	snap := &rwSnapshot{data: data}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		newData := &TestData{Value: i, Name: "updated"}
+		snap.Replace(newData)
+	}
+}
+
+// BenchmarkRWMutexReadWrite 基准测试：RWMutex 混合读写（90% 读，10% 写）
+func BenchmarkRWMutexReadWrite(b *testing.B) {
+	data := &TestData{Value: 100, Name: "benchmark"}
+	snap := &rwSnapshot{data: data}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			if i%10 == 0 {
+				newData := &TestData{Value: i, Name: "updated"}
+				snap.Replace(newData)
+			} else {
+				_ = snap.Load()
+			}
+			i++
+		}
+	})
+}
+
+// BenchmarkRWMutexMapSnapshot 基准测试：RWMutex 大 map 读取性能
+func BenchmarkRWMutexMapSnapshot(b *testing.B) {
+	type MapData struct {
+		Items map[string]int
+	}
+
+	items := make(map[string]int)
+	for i := 0; i < 1000; i++ {
+		items[string(rune('a'+i%26))+string(rune('0'+i%10))] = i
+	}
+
+	data := &MapData{Items: items}
+	snap := struct {
+		mu   sync.RWMutex
+		data *MapData
+	}{data: data}
+
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			snap.mu.RLock()
+			m := snap.data
+			_ = m.Items["a0"]
+			snap.mu.RUnlock()
+		}
+	})
+}
+
