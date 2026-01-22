@@ -3,9 +3,13 @@ package repo
 import (
 	"context"
 	"time"
+)
 
+import (
 	"github.com/redis/go-redis/v9"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 )
 

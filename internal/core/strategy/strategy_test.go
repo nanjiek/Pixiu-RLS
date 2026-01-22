@@ -2,7 +2,9 @@ package strategy
 
 import (
 	"testing"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 )
 

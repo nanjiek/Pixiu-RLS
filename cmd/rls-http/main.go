@@ -7,16 +7,23 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+)
 
+import (
 	"github.com/gorilla/mux"
+)
+
+import (
 	"github.com/nanjiek/pixiu-rls/internal/api"
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/core"
-	"github.com/nanjiek/pixiu-rls/internal/core/strategy" // 仅入口依赖strategy包
+	"github.com/nanjiek/pixiu-rls/internal/core/strategy"
 	"github.com/nanjiek/pixiu-rls/internal/repo"
 	"github.com/nanjiek/pixiu-rls/internal/rules"
+	"github.com/nanjiek/pixiu-rls/internal/rules/source"
 )
 
 func main() {
@@ -30,17 +37,34 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	rootCtx, cancelRoot := context.WithCancel(context.Background())
+	defer cancelRoot()
+
 	// 初始化Redis连接
 	rdb := repo.NewRedis(cfg)
 	defer rdb.Close()
 
-	// 初始化规则缓存
+	// Init rule cache
 	ruleCache := rules.NewCache(cfg, rdb)
-	if err := ruleCache.Bootstrap(context.Background()); err != nil {
-		log.Fatalf("failed to bootstrap rules: %v", err)
+	if cfg.Nacos.Enabled() {
+		nacosSource := source.NewNacosSource(cfg.Nacos)
+		poller := rules.NewPoller(nacosSource, ruleCache, rules.PollerConfig{
+			Interval:   time.Duration(cfg.Nacos.PollIntervalMs) * time.Millisecond,
+			FailPolicy: cfg.Nacos.FailPolicy,
+		})
+		if err := poller.SyncOnce(rootCtx); err != nil {
+			if strings.EqualFold(cfg.Nacos.FailPolicy, "fail-closed") {
+				log.Fatalf("failed to load rules from nacos: %v", err)
+			}
+			log.Printf("nacos pull failed, using last-good rules: %v", err)
+		}
+		go poller.Start(rootCtx)
+	} else {
+		if err := ruleCache.Bootstrap(rootCtx); err != nil {
+			log.Fatalf("failed to bootstrap rules: %v", err)
+		}
+		go ruleCache.StartWatcher(rootCtx)
 	}
-	// 启动规则更新监听器
-	go ruleCache.StartWatcher(context.Background())
 
 	// -------------------------- 关键：依赖注入策略实例 --------------------------
 	// 1. 创建具体策略实例
@@ -90,10 +114,11 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("shutting down server...")
+	cancelRoot()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("server shutdown failed: %v", err)
 	}
 	log.Println("server exited properly")

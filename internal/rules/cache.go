@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/rcu"
 	"github.com/nanjiek/pixiu-rls/internal/repo"
@@ -85,13 +87,7 @@ func (c *Cache) ReloadAll(ctx context.Context) error {
 		}
 	}
 
-	// 使用 RCU 机制更新规则集：创建新的不可变副本并替换
-	newSet := &ImmutableRuleSet{
-		Rules: tmp,
-	}
-	c.ruleSnap.Replace(newSet)
-	
-	slog.Info("reloaded rules", "count", len(tmp))
+	c.ReplaceAll(tmp)
 	return nil
 }
 
@@ -99,7 +95,7 @@ func (c *Cache) ReloadAll(ctx context.Context) error {
 func (c *Cache) Resolve(ruleID string, dims map[string]string) (config.Rule, error) {
 	// 使用 RCU 快照读取规则，无锁并发安全
 	snapshot := c.ruleSnap.Load()
-	
+
 	if ruleID != "" {
 		if r, ok := snapshot.Rules[ruleID]; ok && r.Enabled {
 			return r, nil
@@ -139,7 +135,7 @@ func (c *Cache) Upsert(ctx context.Context, r config.Rule) error {
 	if err := c.rdb.Cli.Set(ctx, c.rdb.KeyRule(r.RuleID), b, 0).Err(); err != nil {
 		return err
 	}
-	
+
 	// 更新本地快照：复制当前规则集，修改后替换
 	oldSnap := c.ruleSnap.Load()
 	newRules := make(map[string]config.Rule, len(oldSnap.Rules)+1)
@@ -147,12 +143,12 @@ func (c *Cache) Upsert(ctx context.Context, r config.Rule) error {
 		newRules[k] = v
 	}
 	newRules[r.RuleID] = r
-	
+
 	newSet := &ImmutableRuleSet{
 		Rules: newRules,
 	}
 	c.ruleSnap.Replace(newSet)
-	
+
 	return c.rdb.PublishUpdate(ctx, r.RuleID)
 }
 
@@ -165,4 +161,25 @@ func (c *Cache) Get(id string) (config.Rule, bool) {
 // GetSnapshot 返回当前的不可变规则集快照（供 Engine 使用）
 func (c *Cache) GetSnapshot() *ImmutableRuleSet {
 	return c.ruleSnap.Load()
+}
+
+// ReplaceAll replaces the entire rule snapshot with a new immutable set.
+func (c *Cache) ReplaceAll(rules map[string]config.Rule) {
+	newSet := &ImmutableRuleSet{
+		Rules: rules,
+	}
+	c.ruleSnap.Replace(newSet)
+	slog.Info("reloaded rules", "count", len(rules))
+}
+
+// BuildRuleMap normalizes a rule slice into a map keyed by RuleID.
+func BuildRuleMap(rules []config.Rule) map[string]config.Rule {
+	res := make(map[string]config.Rule, len(rules))
+	for _, r := range rules {
+		if r.RuleID == "" {
+			continue
+		}
+		res[r.RuleID] = r
+	}
+	return res
 }

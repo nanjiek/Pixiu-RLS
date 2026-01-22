@@ -7,8 +7,13 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+)
 
+import (
 	"github.com/gorilla/mux"
+)
+
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/core"
 	"github.com/nanjiek/pixiu-rls/internal/rules"

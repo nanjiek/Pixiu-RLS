@@ -51,8 +51,12 @@ func main() {
     println(cfg.Host, cfg.Port)
     
     // 3. 更新快照（写操作）
-    newConfig := &Config{Host: "0.0.0.0", Port: 9090}
-    snap.Replace(newConfig)
+    snap.Update(func(old *Config) *Config {
+        next := *old
+        next.Host = "0.0.0.0"
+        next.Port = 9090
+        return &next
+    })
 }
 ```
 
@@ -84,7 +88,7 @@ func (c *Cache) Resolve(ruleID string, dims map[string]string) (config.Rule, err
 // 更新规则（写操作：复制-修改-替换）
 func (c *Cache) Upsert(ctx context.Context, r config.Rule) error {
     // 1. 读取当前快照
-    oldSnap := c.ruleSnap.Load()
+    c.ruleSnap.Update(func(oldSnap *ImmutableRuleSet) *ImmutableRuleSet {
     
     // 2. 复制并修改
     newRules := make(map[string]config.Rule, len(oldSnap.Rules)+1)
@@ -94,8 +98,8 @@ func (c *Cache) Upsert(ctx context.Context, r config.Rule) error {
     newRules[r.RuleID] = r
     
     // 3. 创建新快照并替换
-    newSet := &ImmutableRuleSet{Rules: newRules}
-    c.ruleSnap.Replace(newSet)
+    return &ImmutableRuleSet{Rules: newRules}
+    })
     
     return nil
 }

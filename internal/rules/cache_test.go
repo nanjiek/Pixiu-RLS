@@ -3,7 +3,9 @@ package rules
 import (
 	"testing"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/rcu"
 )
@@ -135,7 +137,7 @@ func TestCacheConcurrentReadWrite(t *testing.T) {
 				time.Sleep(time.Microsecond)
 			}
 			done <- true
-		}(i)  // 传递 i 参数
+		}(i) // 传递 i 参数
 	}
 
 	// 等待所有 goroutine 完成
@@ -153,7 +155,7 @@ func TestCacheConcurrentReadWrite(t *testing.T) {
 func BenchmarkCacheLoad(b *testing.B) {
 	rules := make(map[string]config.Rule)
 	for i := 0; i < 100; i++ {
-		id := string(rune('a' + i%26)) + string(rune('0' + i%10))
+		id := string(rune('a'+i%26)) + string(rune('0'+i%10))
 		rules[id] = config.Rule{
 			RuleID:  id,
 			Limit:   int64(i * 100),
@@ -217,3 +219,42 @@ func BenchmarkCacheResolve(b *testing.B) {
 	})
 }
 
+func TestCacheReplaceAll(t *testing.T) {
+	cache := NewCache(&config.Config{}, nil)
+	cache.ReplaceAll(map[string]config.Rule{
+		"r1": {RuleID: "r1", Limit: 1, Enabled: true},
+	})
+
+	snap := cache.GetSnapshot()
+	if len(snap.Rules) != 1 || snap.Rules["r1"].RuleID != "r1" {
+		t.Fatalf("unexpected snapshot: %#v", snap.Rules)
+	}
+
+	cache.ReplaceAll(map[string]config.Rule{
+		"r2": {RuleID: "r2", Limit: 2, Enabled: true},
+	})
+
+	snap = cache.GetSnapshot()
+	if len(snap.Rules) != 1 || snap.Rules["r2"].RuleID != "r2" {
+		t.Fatalf("unexpected snapshot after replace: %#v", snap.Rules)
+	}
+}
+
+func TestBuildRuleMap(t *testing.T) {
+	rules := []config.Rule{
+		{RuleID: "r1", Limit: 1, Enabled: true},
+		{RuleID: "", Limit: 2, Enabled: true},
+		{RuleID: "r2", Limit: 3, Enabled: true},
+	}
+
+	got := BuildRuleMap(rules)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(got))
+	}
+	if _, ok := got["r1"]; !ok {
+		t.Fatalf("missing r1")
+	}
+	if _, ok := got["r2"]; !ok {
+		t.Fatalf("missing r2")
+	}
+}

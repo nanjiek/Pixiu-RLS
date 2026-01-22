@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/core" // 关键：引用 core.Strategy 接口
 	"github.com/nanjiek/pixiu-rls/internal/repo"

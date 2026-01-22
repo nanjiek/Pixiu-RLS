@@ -4,7 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/repo"
 	"github.com/nanjiek/pixiu-rls/internal/types" // 依赖公共类型

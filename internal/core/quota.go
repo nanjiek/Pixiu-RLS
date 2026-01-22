@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/repo"
 	"github.com/nanjiek/pixiu-rls/internal/types" // 使用公共类型

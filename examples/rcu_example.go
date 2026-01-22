@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/rcu"
 )
 

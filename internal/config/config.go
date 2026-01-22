@@ -1,8 +1,11 @@
 package config
 
 import (
-	"gopkg.in/yaml.v3"
 	"os"
+)
+
+import (
+	"gopkg.in/yaml.v3"
 )
 
 // ServerCfg —— HTTP 服务端口/地址配置
@@ -22,6 +25,25 @@ type RedisCfg struct {
 type Features struct {
 	Audit         string `yaml:"audit"`         // 审计模式："redis_stream" | "none" （后续可扩展 "kafka" 等）
 	LocalFallback bool   `yaml:"localFallback"` // Redis 故障是否启用本地退化（仅建议开发/测试场景开启）
+	FailPolicy    string `yaml:"failPolicy"`    // fail-open | fail-closed
+}
+
+// NacosCfg - Nacos config center (pull mode)
+type NacosCfg struct {
+	Addr           string `yaml:"addr"`           // Nacos address, e.g. "http://127.0.0.1:8848"
+	Namespace      string `yaml:"namespace"`      // tenant/namespace
+	Group          string `yaml:"group"`          // rule group, default DEFAULT_GROUP
+	DataID         string `yaml:"dataId"`         // config dataId
+	Username       string `yaml:"username"`       // optional
+	Password       string `yaml:"password"`       // optional
+	PollIntervalMs int    `yaml:"pollIntervalMs"` // default 5000
+	TimeoutMs      int    `yaml:"timeoutMs"`      // default 2000
+	FailPolicy     string `yaml:"failPolicy"`     // fail-open | fail-closed
+	Format         string `yaml:"format"`         // json | yaml (auto-detect if empty)
+}
+
+func (n NacosCfg) Enabled() bool {
+	return n.Addr != "" && n.DataID != ""
 }
 
 // QuotaCfg —— 配额（分钟/小时/天）
@@ -52,6 +74,9 @@ type BreakerCfg struct {
 type Rule struct {
 	RuleID   string     `yaml:"ruleId"   json:"ruleId"`   // 规则唯一 ID
 	Match    string     `yaml:"match"    json:"match"`    // 路由匹配（示例："/api/login" 或 "*"）
+	Methods  []string   `yaml:"methods" json:"methods"`   // HTTP methods
+	Client   string     `yaml:"client"  json:"client"`    // client kind
+	Priority int        `yaml:"priority" json:"priority"` // higher wins
 	Algo     string     `yaml:"algo"     json:"algo"`     // 算法："sliding_window" | "token_bucket" | "leaky_bucket"
 	WindowMs int64      `yaml:"windowMs" json:"windowMs"` // 时间窗口（毫秒），不同算法语义略有不同
 	Limit    int64      `yaml:"limit"    json:"limit"`    // 基础速率/上限（例如每窗口允许的次数）
@@ -67,6 +92,7 @@ type Config struct {
 	Server         ServerCfg `yaml:"server"`         // 服务配置
 	Redis          RedisCfg  `yaml:"redis"`          // Redis 配置
 	Features       Features  `yaml:"features"`       // 特性开关
+	Nacos          NacosCfg  `yaml:"nacos"`          // Nacos dynamic rules config
 	BootstrapRules []Rule    `yaml:"bootstrapRules"` // 启动时注入的初始规则（如无则可留空）
 }
 
@@ -76,8 +102,9 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	expanded := os.ExpandEnv(string(b))
 	var c Config
-	if err := yaml.Unmarshal(b, &c); err != nil {
+	if err := yaml.Unmarshal([]byte(expanded), &c); err != nil {
 		return nil, err
 	}
 	return &c, nil

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+)
 
+import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 	"github.com/nanjiek/pixiu-rls/internal/types"
 )
