@@ -40,8 +40,15 @@ func main() {
 	rootCtx, cancelRoot := context.WithCancel(context.Background())
 	defer cancelRoot()
 
-	// 初始化Redis连接
-	rdb := repo.NewRedis(cfg)
+	// Initialize Redis connection
+	repoAny, err := repo.NewRedis(cfg, nil)
+	if err != nil {
+		log.Fatalf("failed to init redis: %v", err)
+	}
+	rdb, ok := repoAny.(*repo.RedisRepo)
+	if !ok {
+		log.Fatalf("unexpected repo type: %T", repoAny)
+	}
 	defer rdb.Close()
 
 	// Init rule cache

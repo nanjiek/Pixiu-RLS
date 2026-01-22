@@ -15,10 +15,22 @@ type ServerCfg struct {
 
 // RedisCfg —— Redis 连接与命名空间配置
 type RedisCfg struct {
-	Addr           string `yaml:"addr"`           // Redis 地址，如 "127.0.0.1:6379"
-	DB             int    `yaml:"db"`             // 使用的 DB 编号（默认 0）
-	Prefix         string `yaml:"prefix"`         // 统一 Key 前缀，隔离多环境数据，如 "pixiu:rls"
-	UpdatesChannel string `yaml:"updatesChannel"` // Pub/Sub 频道名，用于规则热更新广播
+	Addr               string   `yaml:"addr"`               // Redis address, e.g. "127.0.0.1:6379"
+	Addrs              []string `yaml:"addrs"`              // Optional shard addresses
+	Password           string   `yaml:"password"`           // Redis password
+	DB                 int      `yaml:"db"`                 // Redis DB index
+	Prefix             string   `yaml:"prefix"`             // Key prefix
+	UpdatesChannel     string   `yaml:"updatesChannel"`     // Pub/Sub channel for rule updates
+	PoolSize           int      `yaml:"poolSize"`           // Connection pool size
+	MinIdleConns       int      `yaml:"minIdleConns"`       // Minimum idle connections
+	ConnMaxLifetimeSec int      `yaml:"connMaxLifetimeSec"` // Max connection lifetime (sec)
+	ConnMaxIdleTimeSec int      `yaml:"connMaxIdleTimeSec"` // Max idle time (sec)
+	MaxRetries         int      `yaml:"maxRetries"`         // Command retry count
+	MinRetryBackoffMs  int      `yaml:"minRetryBackoffMs"`  // Min retry backoff (ms)
+	MaxRetryBackoffMs  int      `yaml:"maxRetryBackoffMs"`  // Max retry backoff (ms)
+	ReadTimeoutMs      int      `yaml:"readTimeoutMs"`      // Read timeout (ms)
+	WriteTimeoutMs     int      `yaml:"writeTimeoutMs"`     // Write timeout (ms)
+	DialTimeoutMs      int      `yaml:"dialTimeoutMs"`      // Dial timeout (ms)
 }
 
 // Features —— 特性开关

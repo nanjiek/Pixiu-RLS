@@ -25,16 +25,23 @@ func NewLeaky(rdb *repo.RedisRepo) *Leaky {
 // Allow 实现core.Strategy接口
 func (l *Leaky) Allow(ctx context.Context, rule config.Rule, dimKey string, now time.Time) (types.Decision, error) {
 	// 生成Redis键
-	levelKey := l.repo.KeyLBLevel(rule.RuleID, dimKey)
-	tsKey := l.repo.KeyLBTS(rule.RuleID, dimKey)
+	levelKey := l.repo.KeyLB(rule.RuleID, dimKey)
 
 	// 计算漏水速率（每秒允许的请求数）
 	ratePerMs := float64(rule.Limit) / float64(rule.WindowMs)
 	maxQueue := rule.Limit + rule.Burst // 最大队列长度=基础限制+突发容量
+	ttlMs := int64(0)
+	if ratePerMs > 0 {
+		ttlMs = int64(float64(maxQueue) / ratePerMs)
+	}
+	if ttlMs < 1000 {
+		ttlMs = 1000
+	}
+	ttlMs += 1000
 
 	// 执行Lua脚本（原子操作）
-	res, err := repo.ScriptLeaky.Run(ctx, l.repo.Cli, []string{levelKey, tsKey},
-		ratePerMs, now.UnixMilli(), maxQueue).Result()
+	res, err := repo.ScriptLeaky.Run(ctx, l.repo.Cli, []string{levelKey},
+		ratePerMs, now.UnixMilli(), maxQueue, ttlMs).Result()
 	if err != nil {
 		return types.Decision{
 			Allowed: false,

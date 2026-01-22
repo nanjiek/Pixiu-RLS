@@ -1,6 +1,10 @@
 version: "3.8"
 services:
-  redis:
-    image: redis:9.14
-    ports: ["6379:6379"]
-    command: ["redis-server","--save","","--appendonly","no"]
+  redis-cluster:
+    image: grokzen/redis-cluster:latest
+    ports:
+      - "7000-7011:7000-7011"
+    environment:
+      - IP=0.0.0.0
+      - MASTERS=6
+      - SLAVES_PER_MASTER=1

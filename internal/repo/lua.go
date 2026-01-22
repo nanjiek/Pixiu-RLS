@@ -35,15 +35,16 @@ end
 `)
 
 var ScriptToken = redis.NewScript(`
--- KEYS[1]=tokens, KEYS[2]=last_ts
--- ARGV[1]=capacity, ARGV[2]=refill_per_ms, ARGV[3]=now_ms
+-- KEYS[1]=bucket hash
+-- ARGV[1]=capacity, ARGV[2]=refill_per_ms, ARGV[3]=now_ms, ARGV[4]=ttl_ms
 
 local cap   = tonumber(ARGV[1])
 local rate  = tonumber(ARGV[2])
 local now   = tonumber(ARGV[3])
+local ttl   = tonumber(ARGV[4])
 
-local tokens = tonumber(redis.call('GET', KEYS[1]) or cap)
-local last   = tonumber(redis.call('GET', KEYS[2]) or now)
+local tokens = tonumber(redis.call('HGET', KEYS[1], 'tokens') or cap)
+local last   = tonumber(redis.call('HGET', KEYS[1], 'last_ts') or now)
 
 -- 补充令牌
 if now > last then
@@ -61,22 +62,23 @@ if tokens >= 1 then
 end
 
 -- 保存状态并设置过期时间（保证 key 不会永久存在）
-redis.call('SET', KEYS[1], tokens, 'PX', 60000)
-redis.call('SET', KEYS[2], now,    'PX', 60000)
+redis.call('HSET', KEYS[1], 'tokens', tokens, 'last_ts', now)
+redis.call('PEXPIRE', KEYS[1], ttl)
 
 return {ok, tokens}
 `)
 
 var ScriptLeaky = redis.NewScript(`
--- KEYS[1]=level, KEYS[2]=last_ts
--- ARGV[1]=rate_per_ms, ARGV[2]=now_ms, ARGV[3]=max_queue
+-- KEYS[1]=bucket hash
+-- ARGV[1]=rate_per_ms, ARGV[2]=now_ms, ARGV[3]=max_queue, ARGV[4]=ttl_ms
 
 local rate = tonumber(ARGV[1])
 local now  = tonumber(ARGV[2])
 local maxq = tonumber(ARGV[3])
+local ttl  = tonumber(ARGV[4])
 
-local lvl  = tonumber(redis.call('GET', KEYS[1]) or 0)
-local last = tonumber(redis.call('GET', KEYS[2]) or now)
+local lvl  = tonumber(redis.call('HGET', KEYS[1], 'level') or 0)
+local last = tonumber(redis.call('HGET', KEYS[1], 'last_ts') or now)
 
 -- 漏水
 if now > last then
@@ -92,8 +94,8 @@ if lvl < maxq then
 end
 
 -- 保存状态并设置过期时间
-redis.call('SET', KEYS[1], lvl, 'PX', 60000)
-redis.call('SET', KEYS[2], now, 'PX', 60000)
+redis.call('HSET', KEYS[1], 'level', lvl, 'last_ts', now)
+redis.call('PEXPIRE', KEYS[1], ttl)
 
 return {ok, lvl}
 `)

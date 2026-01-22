@@ -2,6 +2,10 @@ package repo
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -13,91 +17,226 @@ import (
 	"github.com/nanjiek/pixiu-rls/internal/config"
 )
 
+// Key templates for better readability and maintainability
+const (
+	keyRuleTmpl  = "%s:rule:{%s}"
+	keySWTmpl    = "%s:sw:{%s}:%s"
+	keyTBTmpl    = "%s:tb:{%s}:%s"
+	keyLBTmpl    = "%s:lb:{%s}:%s"
+	keyQuotaTmpl = "%s:quota:%s:{%s}:%s:%s"
+	keyBlacklist = "%s:blacklist:ip"
+	keyWhitelist = "%s:whitelist:ip"
+)
+
+// Preloaded Lua scripts
+var (
+	incrExpireScript = redis.NewScript(`
+		local cnt = redis.call('INCR', KEYS[1])
+		if cnt == 1 then
+			redis.call('PEXPIRE', KEYS[1], ARGV[1])
+		end
+		return cnt
+	`)
+)
+
+// Repo interface for abstraction (easy to mock/test)
+type Repo interface {
+	KeyRule(id string) string
+	KeySW(ruleID, dimKey string) string
+	KeyTB(ruleID, dimKey string) string
+	KeyLB(ruleID, dimKey string) string
+	KeyQuota(scope, ruleID, dimKey, ts string) string
+	KeyBlacklistIP() string
+	KeyWhitelistIP() string
+	IsInSet(ctx context.Context, setKey, member string) (bool, error)
+	IncrAndExpire(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	PublishUpdate(ctx context.Context, ruleID string) error
+	Eval(ctx context.Context, script string, keys []string, args ...interface{}) ([]interface{}, error)
+	Close() error
+}
+
 type RedisRepo struct {
-	Cli           *redis.Client
-	Prefix        string
-	UpdateChannel string
+	Prefix         string
+	UpdateChannel  string
+	Cli            *redis.ClusterClient
+	logger         *slog.Logger
+	defaultTimeout time.Duration // Unified timeout config
 }
 
-func NewRedis(cfg *config.Config) *RedisRepo {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         cfg.Redis.Addr,
-		DB:           cfg.Redis.DB,
-		ReadTimeout:  800 * time.Millisecond,
-		WriteTimeout: 800 * time.Millisecond,
-		// 连接池配置（v9 字段）
-		PoolSize:        100,              // 连接池大小
-		MinIdleConns:    10,               // 最小空闲连接
-		ConnMaxLifetime: 5 * time.Minute,  // 替换 MaxConnAge：连接最大存活时间
-		ConnMaxIdleTime: 30 * time.Second, // 替换 IdleTimeout：空闲连接超时
-		MaxRetries:      1,                // 命令重试次数
-		// 重试退避策略（替换 RetryBackoff）
-		MinRetryBackoff: 100 * time.Millisecond,
-		MaxRetryBackoff: 300 * time.Millisecond,
-	})
-	return &RedisRepo{
-		Cli:           rdb,
-		Prefix:        cfg.Redis.Prefix,
-		UpdateChannel: cfg.Redis.UpdatesChannel,
+// NewRedis with functional options for flexibility
+func NewRedis(cfg *config.Config, logger *slog.Logger, opts ...Option) (Repo, error) {
+	if logger == nil {
+		logger = slog.Default()
 	}
+
+	r := &RedisRepo{
+		Prefix:         cfg.Redis.Prefix,
+		UpdateChannel:  cfg.Redis.UpdatesChannel,
+		logger:         logger,
+		defaultTimeout: 100 * time.Millisecond, // Default, can be overridden
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	addrs := normalizeAddrs(cfg.Redis)
+	if len(addrs) == 0 {
+		return nil, errors.New("no redis addresses configured")
+	}
+
+	clusterOpts := buildClusterOptions(cfg.Redis)
+	r.Cli = redis.NewClusterClient(clusterOpts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := r.Cli.Ping(ctx).Err(); err != nil {
+		logger.Error("redis cluster ping failed", "err", err)
+		return nil, fmt.Errorf("redis cluster connect failed: %w", err)
+	}
+
+	return r, nil
 }
 
-func (r *RedisRepo) Close() error { return r.Cli.Close() }
+// Option pattern for custom configurations
+type Option func(*RedisRepo)
 
-// ---- Key helpers ----
-func (r *RedisRepo) KeyRule(id string) string { return r.Prefix + ":rule:" + id }
+func WithDefaultTimeout(d time.Duration) Option {
+	return func(r *RedisRepo) { r.defaultTimeout = d }
+}
+
+// withTimeout helper to reduce repetition
+func (r *RedisRepo) withTimeout(ctx context.Context, opTimeout time.Duration) (context.Context, context.CancelFunc) {
+	if opTimeout == 0 {
+		opTimeout = r.defaultTimeout
+	}
+	return context.WithTimeout(ctx, opTimeout)
+}
+
+// Key generation methods (using templates)
+func (r *RedisRepo) KeyRule(id string) string {
+	return fmt.Sprintf(keyRuleTmpl, r.Prefix, id)
+}
+
 func (r *RedisRepo) KeySW(ruleID, dimKey string) string {
-	return r.Prefix + ":sw:" + ruleID + ":" + dimKey
+	return fmt.Sprintf(keySWTmpl, r.Prefix, ruleID, dimKey)
 }
+
 func (r *RedisRepo) KeyTB(ruleID, dimKey string) string {
-	return r.Prefix + ":tb:" + ruleID + ":" + dimKey
+	return fmt.Sprintf(keyTBTmpl, r.Prefix, ruleID, dimKey)
 }
-func (r *RedisRepo) KeyTBTS(ruleID, dimKey string) string {
-	return r.Prefix + ":tbts:" + ruleID + ":" + dimKey
-}
-func (r *RedisRepo) KeyLBLevel(ruleID, dimKey string) string {
-	return r.Prefix + ":lbq:" + ruleID + ":" + dimKey
-}
-func (r *RedisRepo) KeyLBTS(ruleID, dimKey string) string {
-	return r.Prefix + ":lbts:" + ruleID + ":" + dimKey
+
+func (r *RedisRepo) KeyLB(ruleID, dimKey string) string {
+	return fmt.Sprintf(keyLBTmpl, r.Prefix, ruleID, dimKey)
 }
 
 func (r *RedisRepo) KeyQuota(scope, ruleID, dimKey, ts string) string {
-	// scope: m|h|d
-	return r.Prefix + ":quota:" + scope + ":" + ruleID + ":" + dimKey + ":" + ts
+	return fmt.Sprintf(keyQuotaTmpl, r.Prefix, scope, ruleID, dimKey, ts)
 }
 
-// ---- Black/White list (简化) ----
-func (r *RedisRepo) IsInSet(ctx context.Context, setKey, member string) (bool, error) {
+func (r *RedisRepo) KeyBlacklistIP() string {
+	return fmt.Sprintf(keyBlacklist, r.Prefix)
+}
+
+func (r *RedisRepo) KeyWhitelistIP() string {
+	return fmt.Sprintf(keyWhitelist, r.Prefix)
+}
+
+// IsInSet
+func (r *RedisRepo) IsInSet(parentCtx context.Context, setKey, member string) (bool, error) {
+	ctx, cancel := r.withTimeout(parentCtx, 0)
+	defer cancel()
 	return r.Cli.SIsMember(ctx, setKey, member).Result()
 }
 
-// KeyBlacklistIP 生成IP黑名单的集合键
-func (r *RedisRepo) KeyBlacklistIP() string {
-	return r.Prefix + ":blacklist:ip"
-}
-
-// KeyWhitelistIP 生成IP白名单的集合键
-func (r *RedisRepo) KeyWhitelistIP() string {
-	return r.Prefix + ":whitelist:ip"
-}
-
-func (r *RedisRepo) PublishUpdate(ctx context.Context, ruleID string) error {
-	return r.Cli.Publish(ctx, r.UpdateChannel, ruleID).Err()
-}
-
-// IncrAndExpire 对键进行自增并设置过期时间（键不存在时创建并设置过期时间，已存在时仅自增）
-func (r *RedisRepo) IncrAndExpire(ctx context.Context, key string, ttl time.Duration) (int64, error) {
-	// 先自增
-	cnt, err := r.Cli.Incr(ctx, key).Result()
-	if err != nil {
-		return 0, err
+// IncrAndExpire
+func (r *RedisRepo) IncrAndExpire(parentCtx context.Context, key string, ttl time.Duration) (int64, error) {
+	ctx, cancel := r.withTimeout(parentCtx, 0)
+	defer cancel()
+	ttlMs := ttl.Milliseconds()
+	if ttlMs <= 0 {
+		ttlMs = 1
 	}
-	// 若自增后的值为1（说明是新键），则设置过期时间
-	if cnt == 1 {
-		if err := r.Cli.Expire(ctx, key, ttl).Err(); err != nil {
-			return 0, err
+	res, err := incrExpireScript.Run(ctx, r.Cli, []string{key}, ttlMs).Int64()
+	if err != nil {
+		return 0, fmt.Errorf("lua script execution failed for key %s: %w", key, err)
+	}
+	return res, nil
+}
+
+// PublishUpdate
+func (r *RedisRepo) PublishUpdate(parentCtx context.Context, ruleID string) error {
+	ctx, cancel := r.withTimeout(parentCtx, 0)
+	defer cancel()
+	if err := r.Cli.Publish(ctx, r.UpdateChannel, ruleID).Err(); err != nil {
+		return fmt.Errorf("publish update for rule %s failed: %w", ruleID, err)
+	}
+	return nil
+}
+
+// Eval (with longer timeout for complex scripts)
+func (r *RedisRepo) Eval(parentCtx context.Context, script string, keys []string, args ...interface{}) ([]interface{}, error) {
+	ctx, cancel := r.withTimeout(parentCtx, 200*time.Millisecond)
+	defer cancel()
+	res, err := r.Cli.Eval(ctx, script, keys, args...).Result()
+	if err != nil {
+		return nil, fmt.Errorf("eval script failed: %w", err)
+	}
+	if val, ok := res.([]interface{}); ok {
+		return val, nil
+	}
+	return []interface{}{res}, nil
+}
+
+// Close
+func (r *RedisRepo) Close() error {
+	return r.Cli.Close()
+}
+
+// Helper functions
+func normalizeAddrs(cfg config.RedisCfg) []string {
+	if len(cfg.Addrs) > 0 {
+		return cfg.Addrs
+	}
+	if cfg.Addr == "" {
+		return nil
+	}
+	parts := strings.Split(cfg.Addr, ",")
+	var out []string
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
 		}
 	}
-	return cnt, nil
+	return out
+}
+
+func buildClusterOptions(cfg config.RedisCfg) *redis.ClusterOptions {
+	return &redis.ClusterOptions{
+		Addrs:          normalizeAddrs(cfg), // Already called, but for clarity
+		Password:       cfg.Password,
+		ReadOnly:       false,
+		RouteByLatency: true,
+		PoolSize:       max(cfg.PoolSize, 100),
+		MinIdleConns:   max(cfg.MinIdleConns, 10),
+		DialTimeout:    durationOrDefault(cfg.DialTimeoutMs, 800),
+		ReadTimeout:    durationOrDefault(cfg.ReadTimeoutMs, 800),
+		WriteTimeout:   durationOrDefault(cfg.WriteTimeoutMs, 800),
+		MaxRetries:     max(cfg.MaxRetries, 2),
+	}
+}
+
+func max(val, def int) int {
+	if val > def {
+		return val
+	}
+	return def
+}
+
+func durationOrDefault(ms int, defMs int) time.Duration {
+	if ms <= 0 {
+		ms = defMs
+	}
+	return time.Duration(ms) * time.Millisecond
 }

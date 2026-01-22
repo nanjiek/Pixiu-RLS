@@ -26,15 +26,22 @@ func NewToken(rdb *repo.RedisRepo) *Token {
 func (t *Token) Allow(ctx context.Context, rule config.Rule, dimKey string, now time.Time) (types.Decision, error) {
 	// 生成Redis键
 	tokenKey := t.repo.KeyTB(rule.RuleID, dimKey)
-	tsKey := t.repo.KeyTBTS(rule.RuleID, dimKey)
 
 	// 计算令牌补充速率（每毫秒补充的令牌数）
 	refillPerMs := float64(rule.Limit) / float64(rule.WindowMs)
 	maxTokens := rule.Limit + rule.Burst // 最大令牌数=基础限制+突发容量
+	ttlMs := int64(0)
+	if refillPerMs > 0 {
+		ttlMs = int64(float64(maxTokens) / refillPerMs)
+	}
+	if ttlMs < 1000 {
+		ttlMs = 1000
+	}
+	ttlMs += 1000
 
 	// 执行Lua脚本（补充令牌+判断是否允许）
-	res, err := repo.ScriptToken.Run(ctx, t.repo.Cli, []string{tokenKey, tsKey},
-		maxTokens, refillPerMs, now.UnixMilli()).Result()
+	res, err := repo.ScriptToken.Run(ctx, t.repo.Cli, []string{tokenKey},
+		maxTokens, refillPerMs, now.UnixMilli(), ttlMs).Result()
 	if err != nil {
 		return types.Decision{
 			Allowed: false,
