@@ -2,99 +2,94 @@
 
 <div align="center">
 
-**基于 Go + Redis 的高性能分布式限流配额服务**
+**基于 Go + Redis 的高性能分布式限流配额服�?*
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![Redis](https://img.shields.io/badge/Redis-7.0+-DC382D?style=flat&logo=redis&logoColor=white)](https://redis.io)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-支持多种限流算法和多维度控制，适用于网关和微服务架构
+支持多种限流算法和多维度控制，适用于网关和微服务架�?
 
-[特性](#核心功能) • [快速开始](#快速开始) • [文档](#文档) • [性能](#性能指标)
+[特性](#核心功能) �?[快速开始](#快速开�? �?[文档](#文档) �?[性能](#性能指标)
 
 </div>
 
 ---
 
-## 📖 项目简介
+## 📖 项目简�?
 
-Pixiu-RLS (Rate Limiting Service) 是一个**轻量级但功能强大**的分布式限流服务，专为分布式系统设计，提供统一的流量控制能力。
+Pixiu-RLS (Rate Limiting Service) 是一�?*轻量级但功能强大**的分布式限流服务，专为分布式系统设计，提供统一的流量控制能力�?
 
-### 亮点特性
+### 亮点特�?
 
-- 🚀 **极致性能**：基于 RCU 快照机制，规则查询性能提升 **60+ 倍**
-- 🔧 **灵活配置**：支持多种限流算法、多维度限制、配额管理
-- 🔥 **热更新**：规则动态更新，无需重启服务
-- 🛡️ **自我保护**：熔断机制自动保护系统
-- 📊 **精确限流**：基于 Redis + Lua 实现分布式精确限流
+- 🚀 **极致性能**：基�?RCU 快照机制，规则查询性能提升 **60+ �?*
+- 🔧 **灵活配置**：支持令牌桶算法、多维度限制、配额管�?- 🔥 **热更�?*：规则动态更新，无需重启服务
+- 🛡�?**自我保护**：熔断机制自动保护系�?
+- 📊 **精确限流**：基�?Redis + Lua 实现分布式精确限�?
 - 🎯 **易于集成**：RESTful API，支持任何编程语言接入
 
-## ⚡ 核心功能
+## �?核心功能
 
 ### 限流算法
 
-- ✅ **滑动窗口**（Sliding Window）：精确控制时间窗口内的请求数
-- ✅ **令牌桶**（Token Bucket）：支持流量突发，平滑限流
-- ✅ **漏桶**（Leaky Bucket）：恒定速率处理，削峰填谷
-
+- �?**令牌�?*（Token Bucket）：支持流量突发，平滑限�?
 ### 控制维度
 
-- 🔹 **多维度组合**：IP、用户 ID、应用 ID、路由、设备 ID 等任意组合
-- 🔹 **多级配额**：分钟级、小时级、天级配额限制
+- 🔹 **多维度组�?*：IP、用�?ID、应�?ID、路由、设�?ID 等任意组�?
+- 🔹 **多级配额**：分钟级、小时级、天级配额限�?
 - 🔹 **黑白名单**：灵活配置豁免或永久限制名单
 
-### 高级特性
+### 高级特�?
 
-- 🛡️ **熔断保护**：自动熔断过载保护，避免雪崩
-- 🔄 **规则热更新**：通过 API 或 Redis Pub/Sub 动态更新规则
+- 🛡�?**熔断保护**：自动熔断过载保护，避免雪崩
+- 🔄 **规则热更�?*：通过 API �?Redis Pub/Sub 动态更新规�?
 - 📈 **高性能缓存**：RCU 无锁快照，支持百万级并发
-- 🌐 **分布式一致**：基于 Redis 保证多实例一致性
+- 🌐 **分布式一�?*：基�?Redis 保证多实例一致�?
 
-## 🏗️ 架构概览
+## 🏗�?架构概览
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      HTTP API Layer                         │
-│              (RESTful API / Health Check)                   │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Rate Limit Engine                         │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  • 黑白名单检查  • 维度哈希  • 配额检查  • 策略执行  │   │
-│  └──────────────────────────────────────────────────────┘   │
-└────────────┬───────────────────────────────┬────────────────┘
-             │                               │
-             ▼                               ▼
-┌─────────────────────────┐     ┌──────────────────────────────┐
-│   RCU Snapshot Cache    │     │   Strategy Implementations   │
-│   (Rules Management)    │     │   • Sliding Window           │
-│   • 无锁读取 (60x 性能) │     │   • Token Bucket             │
-│   • 热更新支持           │     │   • Leaky Bucket             │
-└─────────────────────────┘     └──────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Redis Cluster                          │
-│  • 规则存储  • 限流状态  • Pub/Sub 更新通知                 │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────�?
+�?                     HTTP API Layer                         �?
+�?             (RESTful API / Health Check)                   �?
+└────────────────────┬────────────────────────────────────────�?
+                     �?
+                     �?
+┌─────────────────────────────────────────────────────────────�?
+�?                  Rate Limit Engine                         �?
+�? ┌──────────────────────────────────────────────────────�?  �?
+�? �? �?黑白名单检�? �?维度哈希  �?配额检�? �?限流执行  �?  �?�? └──────────────────────────────────────────────────────�?  �?
+└────────────┬───────────────────────────────┬────────────────�?
+             �?                              �?
+             �?                              �?
+┌─────────────────────────�?    ┌──────────────────────────────�?
+�?  RCU Snapshot Cache    �?    �?  Limiter Implementation   �?
+�?  (Rules Management)    �?    �?  �?           �?
+�?  �?无锁读取 (60x 性能) �?    �?  �?Token Bucket             �?
+�?  �?热更新支�?          �?    �?  �?             �?
+└─────────────────────────�?    └──────────────────────────────�?
+             �?
+             �?
+┌─────────────────────────────────────────────────────────────�?
+�?                     Redis Cluster                          �?
+�? �?规则存储  �?限流状�? �?Pub/Sub 更新通知                 �?
+└─────────────────────────────────────────────────────────────�?
 ```
 
 ### 核心模块
 
-| 模块 | 职责 | 关键技术 |
+| 模块 | 职责 | 关键技�?|
 |------|------|---------|
-| `api` | HTTP 接口层 | Gorilla Mux, RESTful API |
+| `api` | HTTP 接口�?| Gorilla Mux, RESTful API |
 | `core` | 限流引擎 | 策略模式, 依赖注入 |
-| `rcu` | 高性能缓存 | **RCU 无锁快照（60x 性能提升）** |
-| `strategy` | 限流算法 | Lua 脚本, Redis 原子操作 |
-| `repo` | 数据访问层 | Redis 客户端封装 |
-| `rules` | 规则管理 | 热更新, Pub/Sub |
+| `rcu` | 高性能缓存 | **RCU 无锁快照�?0x 性能提升�?* |
+| `limiter` | 限流算法 | Lua 脚本, Redis 原子操作 |
+| `repo` | 数据访问�?| Redis 客户端封�?|
+| `rules` | 规则管理 | 热更�? Pub/Sub |
 | `config` | 配置管理 | YAML 配置 |
 | `util` | 工具函数 | 哈希, 维度处理 |
 
-## 🚀 快速开始
+## 🚀 快速开�?
 
 ### 环境要求
 
@@ -133,7 +128,7 @@ features:
 bootstrapRules:
   - ruleId: "api-default"
     match: "/api/*"
-    algo: "sliding_window"
+    algo: "token_bucket"
     windowMs: 1000
     limit: 100
     burst: 20
@@ -151,7 +146,7 @@ bootstrapRules:
 # 使用 Docker
 docker run -d -p 6379:6379 --name redis redis:7-alpine
 
-# 或使用 docker-compose
+# 或使�?docker-compose
 docker-compose -f deployments/docker-compose.yaml up -d
 ```
 
@@ -167,15 +162,15 @@ go build -o rls-http ./cmd/rls-http
 
 服务启动后访问：`http://localhost:8080`
 
-### 快速测试
+### 快速测�?
 
-#### 1. 健康检查
+#### 1. 健康检�?
 
 ```bash
 curl http://localhost:8080/health
 ```
 
-#### 2. 限流检查
+#### 2. 限流检�?
 
 ```bash
 curl -X POST http://localhost:8080/api/check \
@@ -189,21 +184,21 @@ curl -X POST http://localhost:8080/api/check \
   }'
 ```
 
-响应示例：
+响应示例�?
 
 ```json
 {
   "allowed": true,
   "remaining": 95,
   "retryAfterMs": 0,
-  "reason": "sliding_window_allowed"
+  "reason": "allowed"
 }
 ```
 
 #### 3. 规则管理
 
 ```bash
-# 获取所有规则
+# 获取所有规�?
 curl http://localhost:8080/api/rules
 
 # 创建/更新规则
@@ -229,33 +224,33 @@ curl -X POST http://localhost:8080/api/rules \
 
 | 操作 | QPS | 延迟 | vs RWMutex |
 |------|-----|------|-----------|
-| **规则查询** | ~31 亿/s | **0.03 ns** | **62x** ⚡ |
-| **规则更新** | ~5200 万/s | 21.89 ns | 2x |
-| **混合读写（90%读）** | ~1.8 亿/s | 5.59 ns | 30x |
+| **规则查询** | ~31 �?s | **0.03 ns** | **62x** �?|
+| **规则更新** | ~5200 �?s | 21.89 ns | 2x |
+| **混合读写�?0%读）** | ~1.8 �?s | 5.59 ns | 30x |
 
 ### 限流性能
 
-- **单实例 QPS**: 10万+ （滑动窗口）
+- **��ʵ�� QPS**: 10��+
 - **延迟**: P99 < 5ms
 - **并发连接**: 支持 10000+ 并发
 
 ### 资源占用
 
-- **内存**: ~50MB（1000条规则）
-- **CPU**: 单核 < 10%（1万 QPS）
+- **内存**: ~50MB�?000条规则）
+- **CPU**: 单核 < 10%�?�?QPS�?
 - **Redis**: Key 数量取决于维度组合数
 
 ## 📚 文档
 
 ### 核心文档
 
-- [快速入门](docs/RCU_QUICKSTART.md) - RCU 快照快速入门
-- [API 文档](docs/API.md) - 完整的 API 接口说明
-- [部署指南](docs/DEPLOYMENT.md) - 生产环境部署最佳实践
+- [快速入门](docs/RCU_QUICKSTART.md) - RCU 快照快速入�?
+- [API 文档](docs/API.md) - 完整�?API 接口说明
+- [部署指南](docs/DEPLOYMENT.md) - 生产环境部署最佳实�?
 - [开发指南](docs/DEVELOPMENT.md) - 开发者指南和贡献说明
-- [本地降级说明](docs/OPTIMIZATION_LOCAL_FALLBACK.md) - Redis 故障时本地限流/配额降级说明
+- [本地降级说明](docs/OPTIMIZATION_LOCAL_FALLBACK.md) - Redis 故障时本地限�?配额降级说明
 
-### 技术文档
+### 技术文�?
 
 - [RCU 集成说明](docs/RCU_INTEGRATION.md) - RCU 快照机制详解
 - [架构设计](docs/RCU_ARCHITECTURE.md) - 系统架构和设计思路
@@ -263,11 +258,11 @@ curl -X POST http://localhost:8080/api/rules \
 
 ### 示例代码
 
-- [RCU 使用示例](examples/rcu_example.go) - RCU 快照的使用示例
+- [RCU 使用示例](examples/rcu_example.go) - RCU 快照的使用示�?
 
 ## 🧪 测试
 
-### 运行所有测试
+### 运行所有测�?
 
 ```bash
 go test ./...
@@ -301,7 +296,7 @@ cd internal/rules
 go test -bench=. -benchmem
 ```
 
-### 测试覆盖率
+### 测试覆盖�?
 
 ```bash
 go test -cover ./...
@@ -318,7 +313,7 @@ server:
 redis:
   mode: "standalone"  # standalone | sentinel | cluster
   addr: "localhost:6379"      # Redis 地址
-  db: 0                       # 数据库编号
+  db: 0                       # 数据库编�?
   prefix: "pixiu:rls"         # Key 前缀
   updatesChannel: "pixiu:rls:updates"  # Pub/Sub 频道
 
@@ -329,7 +324,7 @@ features:
 bootstrapRules:  # 启动时加载的规则
   - ruleId: "example"
     match: "/api/*"           # 路由匹配
-    algo: "sliding_window"    # 算法：sliding_window|token_bucket|leaky_bucket
+    algo: "token_bucket"    # �㷨��token_bucket
     windowMs: 1000            # 时间窗口（毫秒）
     limit: 100                # 速率限制
     burst: 20                 # 突发容量
@@ -346,32 +341,32 @@ bootstrapRules:  # 启动时加载的规则
       minOpenMs: 8000
 ```
 
-## 🛠️ 开发
+## 🛠�?开�?
 
 ### 项目结构
 
 ```
 Pixiu-RLS/
 ├── cmd/                    # 应用入口
-│   └── rls-http/          # HTTP 服务
+�?  └── rls-http/          # HTTP 服务
 ├── configs/               # 配置文件
 ├── deployments/           # 部署配置
 ├── docs/                  # 文档
 ├── examples/              # 示例代码
-├── internal/              # 内部包
-│   ├── api/              # API 层
-│   ├── config/           # 配置管理
-│   ├── core/             # 核心引擎
-│   │   └── strategy/     # 限流策略
-│   ├── rcu/              # RCU 快照
-│   ├── repo/             # Redis 仓库
-│   ├── rules/            # 规则管理
-│   ├── types/            # 类型定义
-│   └── util/             # 工具函数
+├── internal/              # 内部�?
+�?  ├── api/              # API �?
+�?  ├── config/           # 配置管理
+�?  ├── core/             # 核心引擎
+�?  �?  └── limiter/     # 限流策略
+�?  ├── rcu/              # RCU 快照
+�?  ├── repo/             # Redis 仓库
+�?  ├── rules/            # 规则管理
+�?  ├── types/            # 类型定义
+�?  └── util/             # 工具函数
 └── README.md
 ```
 
-### 本地开发
+### 本地开�?
 
 ```bash
 # 安装依赖
@@ -383,28 +378,28 @@ go test ./...
 # 启动服务（开发模式）
 go run ./cmd/rls-http -c configs/rls.yaml
 
-# 代码格式化
+# 代码格式�?
 go fmt ./...
 
-# 静态检查
+# 静态检�?
 go vet ./...
 ```
 
 ### 添加新的限流策略
 
-1. 在 `internal/core/strategy/` 创建新文件
+1. �?`internal/core/limiter/` 创建新文�?
 2. 实现 `core.Strategy` 接口
-3. 在 `cmd/rls-http/main.go` 注册策略
-4. 添加对应的测试文件
+3. �?`cmd/rls-http/main.go` 注册策略
+4. 添加对应的测试文�?
 
-示例：
+示例�?
 
 ```go
-type MyStrategy struct {
+type MyLimiter struct {
     repo *repo.RedisRepo
 }
 
-func (s *MyStrategy) Allow(ctx context.Context, rule config.Rule, dimKey string, now time.Time) (types.Decision, error) {
+func (l *MyLimiter) Allow(ctx context.Context, rule config.Rule, key string, now time.Time) (types.Decision, error) {
     // 实现你的限流逻辑
     return types.Decision{Allowed: true}, nil
 }
@@ -412,25 +407,25 @@ func (s *MyStrategy) Allow(ctx context.Context, rule config.Rule, dimKey string,
 
 ## 🤝 贡献
 
-欢迎贡献！请查看 [开发指南](docs/DEVELOPMENT.md)。
+欢迎贡献！请查看 [开发指南](docs/DEVELOPMENT.md)�?
 
 ### 贡献流程
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+1. Fork 本仓�?
+2. 创建特性分�?(`git checkout -b feature/AmazingFeature`)
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+5. 开�?Pull Request
 
-## 📝 许可证
+## 📝 许可�?
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采�?MIT 许可�?- 查看 [LICENSE](LICENSE) 文件了解详情�?
 
 ## 🙏 致谢
 
-- [Redis](https://redis.io/) - 高性能内存数据库
-- [Gorilla Mux](https://github.com/gorilla/mux) - HTTP 路由器
-- [Go Redis](https://github.com/redis/go-redis) - Redis Go 客户端
+- [Redis](https://redis.io/) - 高性能内存数据�?
+- [Gorilla Mux](https://github.com/gorilla/mux) - HTTP 路由�?
+- [Go Redis](https://github.com/redis/go-redis) - Redis Go 客户�?
 
 ## 📞 联系方式
 

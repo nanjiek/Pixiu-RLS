@@ -25,12 +25,16 @@ redis.call('PEXPIRE', KEYS[1], window + 1000)
 
 -- 统计窗口内的请求数
 local cnt = redis.call('ZCARD', KEYS[1])
+local remaining = limit - cnt
+if remaining < 0 then
+  remaining = 0
+end
 
--- 返回结果
+-- 返回结果（remaining）
 if cnt > limit then
-  return {0, cnt}
+  return {0, remaining}
 else
-  return {1, cnt}
+  return {1, remaining}
 end
 `)
 
@@ -97,5 +101,10 @@ end
 redis.call('HSET', KEYS[1], 'level', lvl, 'last_ts', now)
 redis.call('PEXPIRE', KEYS[1], ttl)
 
-return {ok, lvl}
+local remaining = maxq - lvl
+if remaining < 0 then
+  remaining = 0
+end
+
+return {ok, remaining}
 `)

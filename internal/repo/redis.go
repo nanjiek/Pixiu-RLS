@@ -19,13 +19,15 @@ import (
 
 // Key templates for better readability and maintainability
 const (
-	keyRuleTmpl  = "%s:rule:{%s}"
-	keySWTmpl    = "%s:sw:{%s}:%s"
-	keyTBTmpl    = "%s:tb:{%s}:%s"
-	keyLBTmpl    = "%s:lb:{%s}:%s"
-	keyQuotaTmpl = "%s:quota:%s:{%s}:%s:%s"
-	keyBlacklist = "%s:blacklist:ip"
-	keyWhitelist = "%s:whitelist:ip"
+	keyRuleTmpl   = "%s:rule:{%s}"
+	keySWTmpl     = "%s:sw:{%s}:%s"
+	keyTBTmpl     = "%s:tb:{%s}:%s"
+	keyLBTmpl     = "%s:lb:{%s}:%s"
+	keyQuotaTmpl  = "%s:quota:%s:{%s}:%s:%s"
+	keyBlacklist  = "%s:blacklist:ip"
+	keyWhitelist  = "%s:whitelist:ip"
+	keyHotIPTmpl  = "%s:hot:ip:%s"
+	keyTmpBlkTmpl = "%s:blacklist:ip:tmp:%s"
 )
 
 // Preloaded Lua scripts
@@ -48,8 +50,12 @@ type Repo interface {
 	KeyQuota(scope, ruleID, dimKey, ts string) string
 	KeyBlacklistIP() string
 	KeyWhitelistIP() string
+	KeyHotIP(ip string) string
+	KeyTempBlacklistIP(ip string) string
 	IsInSet(ctx context.Context, setKey, member string) (bool, error)
 	IncrAndExpire(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	SetTempBlacklistIP(ctx context.Context, ip string, ttl time.Duration) error
+	IsTempBlacklisted(ctx context.Context, ip string) (bool, error)
 	PublishUpdate(ctx context.Context, ruleID string) error
 	Eval(ctx context.Context, script string, keys []string, args ...interface{}) ([]interface{}, error)
 	Close() error
@@ -143,6 +149,14 @@ func (r *RedisRepo) KeyWhitelistIP() string {
 	return fmt.Sprintf(keyWhitelist, r.Prefix)
 }
 
+func (r *RedisRepo) KeyHotIP(ip string) string {
+	return fmt.Sprintf(keyHotIPTmpl, r.Prefix, ip)
+}
+
+func (r *RedisRepo) KeyTempBlacklistIP(ip string) string {
+	return fmt.Sprintf(keyTmpBlkTmpl, r.Prefix, ip)
+}
+
 // IsInSet
 func (r *RedisRepo) IsInSet(parentCtx context.Context, setKey, member string) (bool, error) {
 	ctx, cancel := r.withTimeout(parentCtx, 0)
@@ -163,6 +177,27 @@ func (r *RedisRepo) IncrAndExpire(parentCtx context.Context, key string, ttl tim
 		return 0, fmt.Errorf("lua script execution failed for key %s: %w", key, err)
 	}
 	return res, nil
+}
+
+// SetTempBlacklistIP stores a temporary blacklist entry with TTL.
+func (r *RedisRepo) SetTempBlacklistIP(parentCtx context.Context, ip string, ttl time.Duration) error {
+	ctx, cancel := r.withTimeout(parentCtx, 0)
+	defer cancel()
+	if ttl <= 0 {
+		ttl = time.Minute
+	}
+	return r.Cli.Set(ctx, r.KeyTempBlacklistIP(ip), 1, ttl).Err()
+}
+
+// IsTempBlacklisted checks whether a temporary blacklist entry exists.
+func (r *RedisRepo) IsTempBlacklisted(parentCtx context.Context, ip string) (bool, error) {
+	ctx, cancel := r.withTimeout(parentCtx, 0)
+	defer cancel()
+	res, err := r.Cli.Exists(ctx, r.KeyTempBlacklistIP(ip)).Result()
+	if err != nil {
+		return false, err
+	}
+	return res > 0, nil
 }
 
 // PublishUpdate
