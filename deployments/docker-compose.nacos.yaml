@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  redis-cluster:
+    image: grokzen/redis-cluster:latest
+    container_name: limiter-redis-cluster
+    ports:
+      - "7000-7011:7000-7011"
+    environment:
+      - IP=172.30.0.10
+      - BIND_ADDRESS=0.0.0.0
+      - MASTERS=6
+      - SLAVES_PER_MASTER=1
+      - REDIS_ARGS=--protected-mode no
+      # 增加：让镜像内的初始化脚本多等一会儿节点启动
+      - INITIAL_DELAY=10
+    healthcheck:
+      # 简化检查逻辑，只要有一个端口能响应且集群状态 OK 即可
+      test: ["CMD-SHELL", "redis-cli -p 7000 cluster info | grep cluster_state:ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30       # 增加重试次数（5s * 30 = 150s，足够长了）
+      start_period: 60s # 给它一分钟的“冷启动”时间
+    networks:
+      limiter-net:
+        ipv4_address: 172.30.0.10
+  nacos:
+    image: nacos/nacos-server:v2.4.3
+    container_name: limiter-nacos
+    ports:
+      - "8848:8848"
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/v1/console/health/liveness"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - limiter-net
+
+  rls:
+    build:
+      context: ..
+    image: pixiu-rls:latest
+    container_name: limiter-rls
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis-cluster:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    volumes:
+      # Windows 建议使用相对路径或绝对路径，确保 config.yaml 存在
+      - ../configs/rls.nacos.yaml:/etc/pixiu-rls/config.yaml
+    command: ["-c", "/etc/pixiu-rls/config.yaml"]
+    networks:
+      - limiter-net
+
+networks:
+  limiter-net:
+    name: limiter-net
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

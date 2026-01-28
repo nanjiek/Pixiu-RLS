@@ -1,0 +1,35 @@
+server:
+  httpAddr: ":8080"
+
+redis:
+  addrs:
+    - "redis-cluster:7000"
+    - "redis-cluster:7001"
+    - "redis-cluster:7002"
+    - "redis-cluster:7003"
+    - "redis-cluster:7004"
+    - "redis-cluster:7005"
+    - "redis-cluster:7006"
+    - "redis-cluster:7007"
+    - "redis-cluster:7008"
+    - "redis-cluster:7009"
+    - "redis-cluster:7010"
+    - "redis-cluster:7011"
+  db: 0
+  prefix: "pixiu:rls"
+  updatesChannel: "pixiu_rls_updates"
+
+features:
+  audit: "none"
+  localFallback: false
+  failPolicy: "fail-closed"
+
+nacos:
+  addr: "http://nacos:8848"
+  dataId: "pixiu-rls-rules"
+  group: "DEFAULT_GROUP"
+  namespace: ""
+  pollIntervalMs: 5000
+  timeoutMs: 2000
+  failPolicy: "fail-open"
+  format: "json"

@@ -1,0 +1,30 @@
+[
+  {
+    "ruleId": "login_tb",
+    "match": "/api/login",
+    "algo": "token_bucket",
+    "windowMs": 1000,
+    "limit": 100000,
+    "burst": 200000,
+    "dims": ["ip", "route"],
+    "enabled": true
+  },
+  {
+    "ruleId": "upload_sw",
+    "match": "/api/upload",
+    "algo": "sliding_window",
+    "windowMs": 1000,
+    "limit": 100000,
+    "dims": ["ip"],
+    "enabled": true
+  },
+  {
+    "ruleId": "stream_lb",
+    "match": "/api/stream",
+    "algo": "leaky_bucket",
+    "windowMs": 1000,
+    "limit": 100000,
+    "dims": ["ip"],
+    "enabled": true
+  }
+]
